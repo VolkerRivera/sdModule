@@ -103,6 +103,8 @@ uint8_t statusADD = 10;
 uint8_t statusDELETE= 10;
 uint8_t statusINSIDE= 10;
 uint8_t statusALLOWED = 10;
+fsStatus estado;
+char timestamp[18]; //dd-mm-aa hh:mm:ss
 /* Private function prototypes -----------------------------------------------*/
 static void SystemClock_Config(void);
 static void Error_Handler(void);
@@ -110,8 +112,10 @@ __NO_RETURN void app_main (void *arg);
 uint8_t tieneAcceso(char codigoPIN[]); 
 uint8_t addVecino(identificacion vecino);
 uint8_t deleteVecino(char codigoPIN[], char DNI[]);
-uint8_t estaDentro(char DNI[]);
-fsStatus estado;
+uint8_t estaDentro(char DNI[], bool cambiarEstado); //cambiarEstado = false solo en consulta (pagina web p.ej), cambiarEstado = true cuando la persona accede/sale. Devuelve el estado TRAS la actualizacion
+//uint8_t RFID_Used(); //quedaria añadir este numero a la estructura de identificacion
+//uint8_t PIN_Used(char DNI[],char codigoPIN[]);
+uint8_t registerPerson(char timestamp[], char DNI[], bool RFID); //hora de entrada o salida, persona que entra o sale, metodo de entrada o salida
 /* Private functions ---------------------------------------------------------*/
 __NO_RETURN void app_main (void *arg) {
   (void)arg;
@@ -194,18 +198,22 @@ int main(void)
 	strcpy(Volker.DNI, "51023293R");
 	Volker.estaDentro = false;
 	
+	strcpy(timestamp,"10-04-24 10:56:30");
+	
 	printf("---------------------------------------------------------\n");
-  statusADD = addVecino(Volker); //LED VERDE ;; ME AÑADE A MI
+  /*statusADD = addVecino(Volker); //LED VERDE ;; ME AÑADE A MI
 	HAL_Delay(500);
 	printf("---------------------------------------------------------\n");
   statusALLOWED = tieneAcceso("281218"); //LED AZUL // deberia decir qe tengo acceso:
+	HAL_Delay(500);*/
+	printf("---------------------------------------------------------\n");
+  statusINSIDE = estaDentro("51023293R", false); // deberia decir que no estoy dentro: 
+	HAL_Delay(500);
+	statusINSIDE = estaDentro("51023293R", true); // deberia decir que si estoy dentro: 
 	HAL_Delay(500);
 	printf("---------------------------------------------------------\n");
-  statusINSIDE = estaDentro("51023293R"); // deberia decir que no estoy dentro: 
-	HAL_Delay(500);
-	printf("---------------------------------------------------------\n");
-  statusDELETE = deleteVecino("999999","12345678A"); //LED ROJO ;; BORRA A WILLY
-	HAL_Delay(500);
+  /*statusDELETE = deleteVecino("999999","12345678A"); //LED ROJO ;; BORRA A WILLY
+	HAL_Delay(500);*/
   printf("End of application.\n");
   
 
@@ -535,6 +543,7 @@ uint8_t deleteVecino(char codigoPIN[], char DNI[]){
 	return code;
 }
 
+
 /* Evalua el permiso de acceso comprobando si el codigoPIN se encuentra en el Registro de Vecinos.
 Devuelve code:
 
@@ -601,11 +610,19 @@ uint8_t tieneAcceso(char codigoPIN[]){ //codigoPIN es unico para cada persona
 	return code;
 }
 
-uint8_t estaDentro(char DNI[]){
+/*
+0: no está, pero tiene acceso
+1: está y tiene acceso
+2,3,4: error handling file
+5: error cambiando estado
+6: dicha persona no tiene acceso al edificio
+*/
+
+uint8_t estaDentro(char DNI[], bool cambiarEstado){
 	printf("Comprobando si dicha persona se encuentra dentro del edificio...\n");
 	fflush(stdout);
-	FILE *f;
-	uint8_t code = 0;
+	FILE *f, *fileTemporal;
+	uint8_t code = 6;
 	char isInside;
 	char buffer[128]; //< Buffer donde se almacenan los 128 caracteres leidos
 	
@@ -626,7 +643,20 @@ uint8_t estaDentro(char DNI[]){
 		return code;
   }
 	
-	f = fopen ("M:\\REGVECINOS.TXT","r"); //< Puesto que unicamente vamos a leer este archivo
+	f = fopen ("M:\\REGVECINOS.TXT","r+"); //< Puesto que unicamente vamos a leer este archivo
+	
+	if(cambiarEstado){ //solo se crea un fichero si es necesario
+		fileTemporal = fopen ("M:\\TEMP.TXT","a+");
+		if (fileTemporal == NULL) {
+    //Error handling
+    printf("File not found!\n"); 
+		fflush(stdout);
+		funmount("M:"); // Desmontar antes de retornar si no se encuentra el archivo
+    funinit("M:");
+		code = 4;
+		return code;
+		}
+	}
 	
   if (f == NULL) {
     //Error handling
@@ -637,21 +667,81 @@ uint8_t estaDentro(char DNI[]){
 		code = 4;
 		return code;
   }
+	
 	while(fgets(buffer, sizeof(buffer), f) != NULL){
 		if(strstr(buffer, DNI) != NULL){ //Si se encuentra el DNI en esa linea
-			size_t length = strlen(buffer);
-			isInside = buffer[length - 2]; // El índice length - 2 es el último carácter antes del '\n'
-			if(isInside == '1'){ //Si se lee 1 quiere decir que la persona esta dentro, retornamos 1
-				printf("Esta dentro del edificio.\n");
-				fflush(stdout);
-				code = 1;
-			}else{ // La persona no esta dentro, retornamos 0
-				printf("No esta dentro del edificio.\n");
-				fflush(stdout);
-				code = 0; 
+			
+			size_t length = strlen(buffer); //longitud de la linea
+			isInside = buffer[length - 1]; // El índice length - 2 es el último carácter antes del '\n'
+			if(isInside == '1'){ //Si se lee 1 quiere decir que la persona esta dentro
+				
+				if(cambiarEstado){//Si se debe cambiar estado
+					//Hemos detectado que esta dentro, asi que cambiamos a que ya no esta y devolvemos esto ultimo
+					buffer[length - 1] = '0'; //editamos el buffer que almacena la linea leida
+					printf("Estaba dentro del edificio pero ha salido.\n");
+					fflush(stdout);
+					code = 0;
+				}else{//si no se deve cambiar estado
+					printf("Esta dentro del edificio.\n");
+					fflush(stdout);
+					code = 1;
+					break; //salimos del while si SOLO queremos consultar si la persona esta dentro o no.
+				}
+				
+				
+			}else{ // La persona no esta dentro
+				
+				if(cambiarEstado){
+					buffer[length - 1] = '1'; //editamos el buffer que almacena la linea leida
+					printf("Estaba fuera del edificio pero ha entrado.\n");
+					fflush(stdout);
+					code = 1;
+				}else{
+					printf("No esta dentro del edificio.\n");
+					fflush(stdout);
+					code = 0;
+					break;
+				} 
+				
+				
 			}
 		}
+		
+		//SOLO si cambiarEstado = true, vamos copiando en el archivo temporal
+		if(cambiarEstado){
+			fseek(fileTemporal, 0, SEEK_END);
+			fprintf(fileTemporal, "%s", buffer);
+			fflush(fileTemporal);
+		}
 	}
+	
+	fclose(f); //se cierra si o si porque esta abierto si o si, independientemente del valor de cambiarEstado
+	
+	if(cambiarEstado){
+		//Se cierran ambos ficheros
+		fclose(fileTemporal);
+		//Se elimina f y se renombra fileTemporal con el nombre de f
+		      
+		if(fdelete("M:\\REGVECINOS.TXT", NULL) != fsOK){
+			code = 5;
+			funmount ("M:");
+			funinit ("M:");
+      printf("Error 5: no se pudo eliminar REGVECINOS.TXT\n");
+			fflush(stdout);
+			return code;
+		}
+		if (frename ("M:\\TEMP.TXT", "REGVECINOS.TXT") != fsOK){
+			code = 5;
+			funmount ("M:");
+			funinit ("M:");
+      printf("Error 5: no se pudo renombrar TEMP.TXT a REGVECINOS.TXT\n");
+			fflush(stdout);
+			return code;
+		}
+	}
+	
+	
+	
 	funmount("M:"); // Desmontar antes de retornar si no se encuentra el archivo
   funinit("M:");
   return code;
