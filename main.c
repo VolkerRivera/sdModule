@@ -112,10 +112,10 @@ __NO_RETURN void app_main (void *arg);
 uint8_t tieneAcceso(char codigoPIN[]); 
 uint8_t addVecino(identificacion vecino);
 uint8_t deleteVecino(char codigoPIN[], char DNI[]);
-uint8_t estaDentro(char DNI[], bool cambiarEstado); //cambiarEstado = false solo en consulta (pagina web p.ej), cambiarEstado = true cuando la persona accede/sale. Devuelve el estado TRAS la actualizacion
+uint8_t estaDentro(char timestamp[], char DNI[], bool cambiarEstado); //cambiarEstado = false solo en consulta (pagina web p.ej), cambiarEstado = true cuando la persona accede/sale. Devuelve el estado TRAS la actualizacion
 //uint8_t RFID_Used(); //quedaria añadir este numero a la estructura de identificacion
 //uint8_t PIN_Used(char DNI[],char codigoPIN[]);
-uint8_t registerPerson(char timestamp[], char DNI[], bool RFID); //hora de entrada o salida, persona que entra o sale, metodo de entrada o salida
+uint8_t registerPerson(char timestamp[], char DNI[], char InOut[]); //hora de entrada o salida, persona que entra o sale, metodo de entrada o salida
 /* Private functions ---------------------------------------------------------*/
 __NO_RETURN void app_main (void *arg) {
   (void)arg;
@@ -207,9 +207,13 @@ int main(void)
   statusALLOWED = tieneAcceso("281218"); //LED AZUL // deberia decir qe tengo acceso:
 	HAL_Delay(500);*/
 	printf("---------------------------------------------------------\n");
-  statusINSIDE = estaDentro("51023293R", false); // deberia decir que no estoy dentro: 
+  statusINSIDE = estaDentro(timestamp, "51023293R", false); // deberia decir que no estoy dentro: 
 	HAL_Delay(500);
-	statusINSIDE = estaDentro("51023293R", true); // deberia decir que si estoy dentro: 
+	statusINSIDE = estaDentro(timestamp, "51023293R", true); // deberia decir que si estoy dentro: 
+	HAL_Delay(500);
+	statusINSIDE = estaDentro(timestamp, "51023293R", true); // deberia decir que si estoy dentro: 
+	HAL_Delay(500);
+	statusINSIDE = estaDentro(timestamp, "51023293R", true); // deberia decir que si estoy dentro: 
 	HAL_Delay(500);
 	printf("---------------------------------------------------------\n");
   /*statusDELETE = deleteVecino("999999","12345678A"); //LED ROJO ;; BORRA A WILLY
@@ -315,6 +319,48 @@ static void Error_Handler(void)
   while(1)
   {
   }
+}
+
+/*
+Si esta funcion se llama dentro de otra funcion que monta y desmonta la unidad M:, 
+no hace falta hacerlo aqui. Si se llama individualmente si
+return code
+0: error: no se ha cerrado bien el fichero tras escribir
+1: todo ok
+4: error file not found
+*/
+uint8_t registerPerson(char timestamp[], char DNI[], char InOut[]){ 
+	printf("Se va a añadir un registro de entrada/salida.\n");
+	fflush(stdout);
+	const uint8_t size = 128; //Checkear la longitud maxima de cada linea
+	char buffer [size];
+	FILE* registerfile;
+	uint8_t code = 0;
+	
+	registerfile = fopen ("M:\\REG_INOUT.TXT","a+"); //no puede ser r a no ser que el archivo YA este creado
+	
+	if (registerfile == NULL) {
+    //Error handling
+    printf("File not found!\n"); 
+		fflush(stdout);
+		funmount("M:");
+    funinit("M:");
+		code = 4;
+		return code;
+  }
+
+	//snprintf(dest, destsize, "%s", source)
+	//fseek(registerfile, 0, SEEK_SET);
+	snprintf(buffer, size, "%s -> %s -> %s \n", timestamp, DNI, InOut);
+	rewind(registerfile); //rewind solo funcionara con un a+ file para leer, pero nunca para escribir ya que esta implicito que a (append) es para escribir al final hagas rewinf o fseek
+	fprintf(registerfile,"%s", buffer);
+	fflush(registerfile);
+	
+	if(fclose(registerfile) == 0){
+		code = 1;
+	}
+	
+	return code;
 }
 
 
@@ -618,7 +664,7 @@ uint8_t tieneAcceso(char codigoPIN[]){ //codigoPIN es unico para cada persona
 6: dicha persona no tiene acceso al edificio
 */
 
-uint8_t estaDentro(char DNI[], bool cambiarEstado){
+uint8_t estaDentro(char timestamp[], char DNI[], bool cambiarEstado){
 	printf("Comprobando si dicha persona se encuentra dentro del edificio...\n");
 	fflush(stdout);
 	FILE *f, *fileTemporal;
@@ -681,6 +727,7 @@ uint8_t estaDentro(char DNI[], bool cambiarEstado){
 					printf("Estaba dentro del edificio pero ha salido.\n");
 					fflush(stdout);
 					code = 0;
+					registerPerson(timestamp, DNI, "Ha salido");//Once the drive is successfully initialized, all subsequent calls of finit will return execution status fsOK, leaving internal drive state unchanged.
 				}else{//si no se deve cambiar estado
 					printf("Esta dentro del edificio.\n");
 					fflush(stdout);
@@ -696,6 +743,7 @@ uint8_t estaDentro(char DNI[], bool cambiarEstado){
 					printf("Estaba fuera del edificio pero ha entrado.\n");
 					fflush(stdout);
 					code = 1;
+					registerPerson(timestamp, DNI, "Ha entrado");
 				}else{
 					printf("No esta dentro del edificio.\n");
 					fflush(stdout);
