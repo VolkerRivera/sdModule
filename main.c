@@ -194,10 +194,18 @@ int main(void)
 	strcpy(Volker.DNI, "51023293R");
 	Volker.estaDentro = false;
 	
-  statusADD = addVecino(Volker);
-  statusALLOWED = tieneAcceso("281218");
-  statusINSIDE = estaDentro("51023293R");
-  statusDELETE = deleteVecino("281218","51023293R");
+	printf("---------------------------------------------------------\n");
+  statusADD = addVecino(Volker); //LED VERDE ;; ME AÑADE A MI
+	HAL_Delay(500);
+	printf("---------------------------------------------------------\n");
+  statusALLOWED = tieneAcceso("281218"); //LED AZUL // deberia decir qe tengo acceso:
+	HAL_Delay(500);
+	printf("---------------------------------------------------------\n");
+  statusINSIDE = estaDentro("51023293R"); // deberia decir que no estoy dentro: 
+	HAL_Delay(500);
+	printf("---------------------------------------------------------\n");
+  statusDELETE = deleteVecino("999999","12345678A"); //LED ROJO ;; BORRA A WILLY
+	HAL_Delay(500);
   printf("End of application.\n");
   
 
@@ -315,14 +323,16 @@ Devuelve code:
 
 uint8_t addVecino(identificacion vecino){
 	printf("Se va a añadir a un vecino.\n");
+	fflush(stdout);
 	const uint8_t size = 128; //Checkear la longitud maxima de cada linea
 	char buffer [size];
-	bool yaExiste = false;
+	bool Existe = false;
 	uint8_t code = 0;
 	FILE *f; 
 	if (finit ("M:") != fsOK) {
 		//Error handling
 		printf("No se ha podido inicializar la microSD.\n");
+		fflush(stdout);
 		code = 2;
 		return code;
   }
@@ -330,6 +340,7 @@ uint8_t addVecino(identificacion vecino){
   if (fmount ("M:") != fsOK) {
 		//Error handling
     printf("No se ha podido montar la microSD.\n");
+		fflush(stdout);
 		funinit ("M:");
 		code = 3;
 		return code;
@@ -340,26 +351,31 @@ uint8_t addVecino(identificacion vecino){
   if (f == NULL) {
     //Error handling
     printf("File not found!\n"); 
+		fflush(stdout);
 		funmount("M:");
     funinit("M:");
 		code = 4;
 		return code;
   }
-  else {
+  else {//Si se encuentra el archivo
+		rewind(f); //En caso de que se vuelva a abrir el archivo, empiece a leerse desde el principio siempre, no solo al crearlo.
 		//Check if already exists
 		while(fgets(buffer, sizeof(buffer), f) != NULL){
 			if ((strstr(buffer, vecino.codigoPIN) != NULL) && (strstr(buffer, vecino.DNI)!= NULL)) {
-				yaExiste = true;
+				Existe = true;
 				printf("Ya existe ese vecino.\n");
+				fflush(stdout);
 				break;
 			}
 		}
 		
     // Write data to file
-		if(!yaExiste){
+		if(!Existe){
 			fseek(f, 0, SEEK_END); // Para añadir el nuevo vecino en una nueva linea al final y no donde se haya quedado fgets
 			fprintf(f, "%s,%s,%s,%s,%d\n", vecino.codigoPIN, vecino.nombre, vecino.apellido, vecino.DNI, vecino.estaDentro);
 			fflush(f);
+			printf("Se ha añadido a %s %s.\n", vecino.nombre, vecino.apellido);
+			fflush(stdout);
 			code = 1;
       LED_On(0);
 		}
@@ -370,8 +386,7 @@ uint8_t addVecino(identificacion vecino){
   funinit ("M:");
 	
 	
-	printf("Se ha añadido a %s %s.\n", vecino.nombre, vecino.apellido);
-	fflush(stdout);
+	
 	
 	return code;
 }
@@ -404,14 +419,16 @@ return code:
 
 uint8_t deleteVecino(char codigoPIN[], char DNI[]){
 	printf("Se va a eliminar a un vecino.\n");
+	fflush(stdout);
 	char buffer [128];
-	bool yaExiste = false;
+	bool Existe = false;
 	uint8_t code = 0;
 	FILE *f, *fileTemporal;
 	
 	if (finit ("M:") != fsOK) {
 		//Error handling
 		printf("No se ha podido inicializar la microSD.\n");
+		fflush(stdout);
 		code = 2;
 		return code;
   }
@@ -419,6 +436,7 @@ uint8_t deleteVecino(char codigoPIN[], char DNI[]){
   if (fmount ("M:") != fsOK) {
 		//Error handling
     printf("No se ha podido montar la microSD.\n");
+		fflush(stdout);
 		funinit("M:");
 		code = 3;
 		return code;
@@ -427,34 +445,47 @@ uint8_t deleteVecino(char codigoPIN[], char DNI[]){
 	f = fopen ("M:\\REGVECINOS.TXT","a+");// si se pone "no permitira borrarlo luego", permite lectura desde cualquier parte del archivo
 	fileTemporal = fopen("M:\\TEMP.TXT", "a+"); 
   
-	if (f == NULL || fileTemporal == NULL) {
+	if (f == NULL || fileTemporal == NULL) { // Si no se encuentra el archivo
     //Error handling
     printf("File not found!\n"); 
+		fflush(stdout);
 		code = 4;
 		return code;
 		
-  }else {
+  }else { //Si se encuentra el archivo
     rewind(f);
-		//Check if already exists
+		//Checkeamos si existe dicho vecino
 		while(fgets(buffer, sizeof(buffer), f) != NULL){
 			if ((strstr(buffer, codigoPIN) != NULL) && (strstr(buffer, DNI) != NULL)) {
-				yaExiste = true;
+				Existe = true;
 				
-				printf("Existe ese vecino.\n");
+				printf("Existe ese vecino.\n"); //print ok
+				fflush(stdout);
 				rewind(f); //Vuelve a poner el puntero al inicio del archivo
 				break;
 			}
 		}
 		
-		if(yaExiste){ //si existe lo podemos borrar
+		//Hasta aqui todo correcto porque el archivo REGVECINOS.TXT se crea, se escribe y se lee correctamente
+		
+		if(Existe){ //si existe lo podemos borrar
 			// Actualizamos el fichero copiando todas las lineas a otro y renombrandolo, a excepcion de la linea correspondiente al vecino a borrar
 			while (fgets(buffer, sizeof(buffer), f) != NULL) {
         // Si la línea no contiene el DNI y el PIN a borrar, se escribe en el archivo temporal
-        if (!(strstr(buffer, codigoPIN) != NULL && strstr(buffer, DNI) != NULL)) {
-            fputs(buffer, fileTemporal);
+				printf("Buffer leido: %s, DNI: %s, PIN: %s \n",buffer, DNI, codigoPIN);
+				fflush(stdout);
+        if ((strstr(buffer, codigoPIN) == NULL) && (strstr(buffer, DNI) == NULL)) { // strstr  a null pointer if the sequence is not present in haystack
+            //fputs(buffer, fileTemporal);
+						fseek(fileTemporal, 0, SEEK_END); // Para añadir el nuevo vecino en una nueva linea al final y no donde se haya quedado fgets
+						fprintf(fileTemporal, "%s", buffer);
+						fflush(fileTemporal);
+						printf("Buffer escrito en temp: %s\n", buffer);
+						fflush(stdout);
         }
 			}
 			//Una vez copiado cerramos los archivos
+			fflush(f);
+			fflush(fileTemporal);
 			fclose(f);
 			fclose(fileTemporal);
 			//Eliminamos el original
@@ -463,17 +494,20 @@ uint8_t deleteVecino(char codigoPIN[], char DNI[]){
 				code = 5;
 				funmount ("M:");
 				funinit ("M:");
-        printf("Error 5: no se pudo eliminar REGVECINOS.TXT");
+        printf("Error 5: no se pudo eliminar REGVECINOS.TXT\n");
+				fflush(stdout);
 				return code;
 			}
 			if (frename ("M:\\TEMP.TXT", "REGVECINOS.TXT") != fsOK){
 				code = 5;
 				funmount ("M:");
 				funinit ("M:");
-        printf("Error 5: no se pudo renombrar TEMP.TXT a REGVECINOS.TXT");
+        printf("Error 5: no se pudo renombrar TEMP.TXT a REGVECINOS.TXT\n");
+				fflush(stdout);
 				return code;
 			}
 			printf("Vecino eliminado correctamente.\n");
+			fflush(stdout);
 			code = 1;
       LED_On(2);
 		}else{// Si el vecino no existe
@@ -481,6 +515,8 @@ uint8_t deleteVecino(char codigoPIN[], char DNI[]){
 			/* Se cierran ambos archivos */
 			fclose(f);
 			fclose(fileTemporal);
+			printf("Ficheros cerrados, borrando TEMP.TXT...\n");
+			fflush(stdout);
 			/* Eliminamos el archivo temporal*/
 			if(fdelete("M:\\TEMP.TXT", NULL) != fsOK){
 				code = 6;
@@ -512,12 +548,14 @@ Devuelve code:
 
 uint8_t tieneAcceso(char codigoPIN[]){ //codigoPIN es unico para cada persona
 	printf("Comprobando permiso de acceso...\n");
+	fflush(stdout);
 	FILE *f;
 	uint8_t code = 0;
 	char buffer[128]; //< Buffer donde se almacenan los 128 caracteres leidos
 	if (finit ("M:") != fsOK) {
 		//Error handling
 		printf("No se ha podido inicializar la microSD.\n");
+		fflush(stdout);
 		code = 2;
 		return code;
   }
@@ -525,6 +563,7 @@ uint8_t tieneAcceso(char codigoPIN[]){ //codigoPIN es unico para cada persona
 	if (fmount ("M:") != fsOK) {
 		//Error handling
     printf("No se ha podido montar la microSD.\n");
+		fflush(stdout);
 		funinit("M:");
 		code = 3;
 		return code;
@@ -535,6 +574,7 @@ uint8_t tieneAcceso(char codigoPIN[]){ //codigoPIN es unico para cada persona
   if (f == NULL) {
     //Error handling
     printf("File not found!\n"); 
+		fflush(stdout);
 		funmount("M:"); // Desmontar antes de retornar si no se encuentra el archivo
     funinit("M:");
 		code = 4;
@@ -556,11 +596,14 @@ uint8_t tieneAcceso(char codigoPIN[]){ //codigoPIN es unico para cada persona
   funmount("M:");
   funinit("M:");
 	
+	if(code == 1) printf("Tiene acceso.\n");
+	fflush(stdout);
 	return code;
 }
 
 uint8_t estaDentro(char DNI[]){
 	printf("Comprobando si dicha persona se encuentra dentro del edificio...\n");
+	fflush(stdout);
 	FILE *f;
 	uint8_t code = 0;
 	char isInside;
@@ -569,6 +612,7 @@ uint8_t estaDentro(char DNI[]){
 	if (finit ("M:") != fsOK) {
 		//Error handling
 		printf("No se ha podido inicializar la microSD.\n");
+		fflush(stdout);
 		code = 2;
 		return code;
   }
@@ -576,6 +620,7 @@ uint8_t estaDentro(char DNI[]){
 	if (fmount ("M:") != fsOK) {
 		//Error handling
     printf("No se ha podido montar la microSD.\n");
+		fflush(stdout);
 		funinit("M:");
 		code = 3;
 		return code;
@@ -586,6 +631,7 @@ uint8_t estaDentro(char DNI[]){
   if (f == NULL) {
     //Error handling
     printf("File not found!\n"); 
+		fflush(stdout);
 		funmount("M:"); // Desmontar antes de retornar si no se encuentra el archivo
     funinit("M:");
 		code = 4;
@@ -596,12 +642,18 @@ uint8_t estaDentro(char DNI[]){
 			size_t length = strlen(buffer);
 			isInside = buffer[length - 2]; // El índice length - 2 es el último carácter antes del '\n'
 			if(isInside == '1'){ //Si se lee 1 quiere decir que la persona esta dentro, retornamos 1
+				printf("Esta dentro del edificio.\n");
+				fflush(stdout);
 				code = 1;
 			}else{ // La persona no esta dentro, retornamos 0
+				printf("No esta dentro del edificio.\n");
+				fflush(stdout);
 				code = 0; 
 			}
 		}
 	}
+	funmount("M:"); // Desmontar antes de retornar si no se encuentra el archivo
+  funinit("M:");
   return code;
 }
 

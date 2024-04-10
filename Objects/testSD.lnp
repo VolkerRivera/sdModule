@@ -1,7 +1,7 @@
 --cpu=Cortex-M4 --fpu=SoftVFP
 ".\objects\main.o"
 ".\objects\led_nucleo_f429zi.o"
-"C:\Keil_v5\ARM\PACK\ARM\CMSIS\5.8.0\CMSIS\RTOS2\RTX\Library\ARM\RTX_CM3.lib"
+"C:\Users\volke\AppData\Local\Arm\Packs\ARM\CMSIS\5.8.0\CMSIS\RTOS2\RTX\Library\ARM\RTX_CM3.lib"
 ".\objects\rtx_lib.o"
 ".\objects\rtx_config.o"
 ".\objects\spi_stm32f4xx.o"
@@ -19,7 +19,7 @@
 ".\objects\stm32f4xx_hal_spi.o"
 ".\objects\startup_stm32f429xx.o"
 ".\objects\system_stm32f4xx.o"
-"C:\Keil_v5\ARM\PACK\Keil\MDK-Middleware\7.13.0\FileSystem\Lib\ARM\FS_Dbg_LFN_CM3_L.lib"
+"C:\Users\volke\AppData\Local\Arm\Packs\Keil\MDK-Middleware\7.13.0\FileSystem\Lib\ARM\FS_Dbg_LFN_CM3_L.lib"
 ".\objects\fs_config.o"
 ".\objects\fs_debug.o"
 --strict --scatter ".\Objects\testSD.sct"
