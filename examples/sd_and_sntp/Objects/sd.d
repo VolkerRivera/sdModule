@@ -1,0 +1,9 @@
+.\objects\sd.o: SD.c
+.\objects\sd.o: SD.h
+.\objects\sd.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdio.h
+.\objects\sd.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\ctype.h
+.\objects\sd.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\string.h
+.\objects\sd.o: C:\Users\volke\AppData\Local\Arm\Packs\Keil\MDK-Middleware\7.13.0\FileSystem\Include\rl_fs.h
+.\objects\sd.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdint.h
+.\objects\sd.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdbool.h
+.\objects\sd.o: C:\Users\volke\AppData\Local\Arm\Packs\Keil\MDK-Middleware\7.13.0\Board\Board_LED.h
