@@ -40,12 +40,21 @@
 /* Includes ------------------------------------------------------------------*/
 #include "stm32f4xx_hal.h"
 
+#ifdef _RTE_
+#include "RTE_Components.h"             // Component selection
+#endif
+#ifdef RTE_CMSIS_RTOS2                  // when RTE component CMSIS RTOS2 is used
+#include "cmsis_os2.h"                  // ::CMSIS:RTOS2
+#endif
+
 /* Exported types ------------------------------------------------------------*/
 /* Exported constants --------------------------------------------------------*/
+extern uint64_t app_main_stk[];
+extern const osThreadAttr_t app_main_attr;
+
 /* Exported macro ------------------------------------------------------------*/
 /* Exported functions ------------------------------------------------------- */
-  /* Exported thread functions,  
-  Example: extern void app_main (void *arg); */
+extern void app_main (void *arg);
 
 #endif /* __MAIN_H */
 

@@ -459,3 +459,53 @@ uint8_t estaDentro(char timestamp[], char DNI[], bool cambiarEstado){
 	mount_unmount(false); //unmount y uninit
   return code;
 }
+
+uint8_t cuanta_gente (void){ //mientras se consulta esto no se puede añadir a gente asi que siempre devolvera un valor real
+	uint8_t contador = 0;
+	char linea[128]; // Asumiendo que ninguna línea excede los 128 caracteres
+	FILE *f, *fileTemporal;
+	mount_unmount(true);
+	
+	f = fopen ("M:\\REGVECINOS.TXT","r"); //leeremos linea por linea
+	if (f == NULL) {
+        printf("Error al abrir el archivo.\n");
+				fflush(stdout);
+				//return 0; asignar un valor para el codigo de errores
+    }
+	
+		while (fgets(linea, sizeof(linea), f)) {
+        // Verifica si la línea no está vacía (ignorando posibles líneas solo con '\n')
+        if (linea[0] != '\n' && linea[0] != '\0') {
+            contador++;
+        }
+    }
+		
+	fclose(f); // Cierra el archivo
+	
+	mount_unmount(false);
+	return contador; // Retorna el número de líneas con información
+}
+
+char* read_this_line(uint8_t numeroLinea){
+	FILE *f;
+	static char linea[128];
+	int contador = 0;
+	mount_unmount(true);
+	
+	f = fopen("M:\\REGVECINOS.TXT", "r"); // Abre el archivo en modo de lectura
+    if (f == NULL) {
+      printf("Error al abrir el archivo");
+			fflush(stdout);
+    }
+		
+	while (fgets(linea, sizeof(linea), f)) {
+        if (++contador == numeroLinea) {
+            fclose(f); // Cierra el archivo
+						mount_unmount(false);
+            return linea; // Retorna la línea deseada
+        }
+    }
+		
+	printf("Error al leer linea\n");
+		return NULL; //RETORNA NULL SI LA LINEA NO EXISTE
+}

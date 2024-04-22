@@ -2,7 +2,7 @@
   ******************************************************************************
   * @file    Templates/Src/main.c 
   * @author  MCD Application Team
-  * @brief   STM32F4xx HAL API Template project 
+  * @brief   Main program body
   *
   * @note    modified by ARM
   *          The modifications allow to use this file as User Code Template
@@ -39,19 +39,13 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "adc.h"
+#include "lcd.h"
+#include "Board_LED.h"
+#include "sntp.h"
+#include "rtc.h"
 
-
-#ifdef _RTE_
-#include "RTE_Components.h"             // Component selection
-#endif
-#ifdef RTE_CMSIS_RTOS2                  // when RTE component CMSIS RTOS2 is used
-#include "cmsis_os2.h"                  // ::CMSIS:RTOS2
-#endif
-
-#ifdef RTE_CMSIS_RTOS2_RTX5
-
-#include "SD.h"
-
+#ifdef RTE_CMSIS_RTOS2_RTX5 // define lo que va a hacer el RTOS de CMSIS
 /**
   * Override default HAL_GetTick function
   */
@@ -83,34 +77,34 @@ uint32_t HAL_GetTick (void) {
   */
 
 /* Private typedef -----------------------------------------------------------*/
-
-
+	ADC_HandleTypeDef adchandle;
 /* Private define ------------------------------------------------------------*/
 /* Private macro -------------------------------------------------------------*/
 /* Private variables ---------------------------------------------------------*/
-uint8_t statusADD = 10;
-uint8_t statusDELETE= 10;
-uint8_t statusINSIDE= 10;
-uint8_t statusALLOWED = 10;
-fsStatus estado;
-char timestamp[18]; //dd-mm-aa hh:mm:ss
+	uint8_t hora [] = {19,10,30};
+	uint8_t fecha [] = {05,01,03,24};
 /* Private function prototypes -----------------------------------------------*/
-static void SystemClock_Config(void);
-static void Error_Handler(void);
-__NO_RETURN void app_main (void *arg);
+
 /* Private functions ---------------------------------------------------------*/
-__NO_RETURN void app_main (void *arg) {
-  (void)arg;
-	
-
-  osThreadExit();
-}
-
 /**
   * @brief  Main program
   * @param  None
   * @retval None
   */
+	
+void Init_BlueButton(void){
+	HAL_NVIC_EnableIRQ(EXTI15_10_IRQn); // Las interrupciones del boton azul corresponden a las EXTI15-10
+	
+	__HAL_RCC_GPIOC_CLK_ENABLE(); // Se habilita el reloj del GPIO C dado que el boton esta asociado al GPIOC13
+	
+	static GPIO_InitTypeDef GPIO_InitStruct;
+	GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING; // Detecta los flancos de subida
+	GPIO_InitStruct.Pull = GPIO_NOPULL; // No hay R pullup ni pulldown
+	GPIO_InitStruct.Pin = GPIO_PIN_13;
+	HAL_GPIO_Init(GPIOC, &GPIO_InitStruct); // Se inicia el pin
+	
+}
+
 int main(void)
 {
 
@@ -131,39 +125,29 @@ int main(void)
 
   /* Add your application code here
      */
+	/* Iniciar el RTC de forma local se puede hacer hacer aqui dado que no necesita del SO, solo de la capa HAL.
+		 Sin embargo, si queremos sincronizar con el server tendra que ser obligatoriamente despues de iniciar el SO.*/
+	RTC_init(hora, fecha); // En apartado 4 se iniciara desde la callback del sntp
+	//get_time();
 	LED_Initialize();
-	printf("Se han inicializado los LEDs.\n");
-  
-	identificacion Volker;
-	strcpy(Volker.codigoPIN, "281218");
-	strcpy(Volker.nombre, "Volker");
-	strcpy(Volker.apellido, "Rivera");
-	strcpy(Volker.DNI, "51023293R");
-	Volker.estaDentro = false;
-	
-	strcpy(timestamp,"10-04-24 10:56:30");
-	
-	printf("---------------------------------------------------------\n");
-  statusADD = addVecino(Volker); //LED VERDE ;; ME AÑADE A MI
-	printf("---------------------------------------------------------\n");
-  statusALLOWED = tieneAcceso("281218"); //LED AZUL // deberia decir qe tengo acceso:
-	printf("---------------------------------------------------------\n");
-  statusINSIDE = estaDentro(timestamp, "51023293R", false); // deberia decir que no estoy dentro: 
-	statusINSIDE = estaDentro(timestamp, "51023293R", true); // deberia decir que si estoy dentro: 
-	statusINSIDE = estaDentro(timestamp, "51023293R", true); // deberia decir que no estoy dentro: 
-	statusINSIDE = estaDentro(timestamp, "51023293R", true); // deberia decir que si estoy dentro: 
-	printf("---------------------------------------------------------\n");
-  statusDELETE = deleteVecino("999999","12345678A"); //LED ROJO ;; BORRA A WILLY
-  printf("End of application.\n"); //finalmente yo deberia estar dentro y williams eliminado
-  
-
+	for (int i = 0; i < 6; i++){
+		LED_Off(i); // Inicialmente apagamos todos los LEDs
+	}
+	LCD_reset();
+	LCD_init();
+	LCD_update();
+	ADC1_pins_F429ZI_config(); //specific PINS configuration
+	ADC_Init_Single_Conversion(&adchandle , ADC1); //ADC1 configuration
+	Init_BlueButton(); // Este boton tendra asociada una IRQ_Handler en la que nos atendremos a las interrupciones externas
 
 #ifdef RTE_CMSIS_RTOS2
   /* Initialize CMSIS-RTOS2 */
   osKernelInitialize ();
 
-  /* Create thread functions that start executing, */
-  osThreadNew(app_main, NULL, NULL);
+
+  /* Create application main thread */
+  osThreadNew(app_main, NULL, &app_main_attr);
+	//Init_Thread_ADC();
 
   /* Start thread execution */
   osKernelStart();
@@ -175,89 +159,19 @@ int main(void)
   }
 }
 
-/**
-  * @brief  System Clock Configuration
-  *         The system Clock is configured as follow : 
-  *            System Clock source            = PLL (HSE)
-  *            SYSCLK(Hz)                     = 168000000
-  *            HCLK(Hz)                       = 168000000
-  *            AHB Prescaler                  = 1
-  *            APB1 Prescaler                 = 4
-  *            APB2 Prescaler                 = 2
-  *            HSE Frequency(Hz)              = 8000000
-  *            PLL_M                          = 25
-  *            PLL_N                          = 336
-  *            PLL_P                          = 2
-  *            PLL_Q                          = 7
-  *            VDD(V)                         = 3.3
-  *            Main regulator output voltage  = Scale1 mode
-  *            Flash Latency(WS)              = 5
-  * @param  None
-  * @retval None
-  */
-static void SystemClock_Config(void)
-{
-  RCC_ClkInitTypeDef RCC_ClkInitStruct;
-  RCC_OscInitTypeDef RCC_OscInitStruct;
-
-  /* Enable Power Control clock */
-  __HAL_RCC_PWR_CLK_ENABLE();
-
-  /* The voltage scaling allows optimizing the power consumption when the device is 
-     clocked below the maximum system frequency, to update the voltage scaling value 
-     regarding system frequency refer to product datasheet.  */
-  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
-
-  /* Enable HSE Oscillator and activate PLL with HSE as source */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
-  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLM = 8;
-  RCC_OscInitStruct.PLL.PLLN = 336;
-  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
-  RCC_OscInitStruct.PLL.PLLQ = 7;
-  if(HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
-  {
-    /* Initialization Error */
-    Error_Handler();
-  }
-
-  /* Select PLL as system clock source and configure the HCLK, PCLK1 and PCLK2 
-     clocks dividers */
-  RCC_ClkInitStruct.ClockType = (RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2);
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
-  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;  
-  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;  
-  if(HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5) != HAL_OK)
-  {
-    /* Initialization Error */
-    Error_Handler();
-  }
-
-  /* STM32F405x/407x/415x/417x Revision Z devices: prefetch is supported */
-  if (HAL_GetREVID() == 0x1001)
-  {
-    /* Enable the Flash prefetch */
-    __HAL_FLASH_PREFETCH_BUFFER_ENABLE();
-  }
+void EXTI15_10_IRQHandler (void){
+	
+	HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_13); //Manejador del botón azul
+	
 }
 
-/**
-  * @brief  This function is executed in case of error occurrence.
-  * @param  None
-  * @retval None
-  */
-static void Error_Handler(void)
-{
-  /* User may add here some code to deal with this error */
-  while(1)
-  {
-  }
-}
-
-
+void HAL_GPIO_EXTI_Callback( uint16_t GPIO_Pin){ //Interrupción del pulsador azul
+	if(GPIO_Pin==GPIO_PIN_13){
+		uint8_t time_reset [] = {0,0,0};
+		uint8_t date_reset [] = {1,1,1,0};
+		set_time_date(time_reset,date_reset);
+	}
+ }
 #ifdef  USE_FULL_ASSERT
 
 /**
